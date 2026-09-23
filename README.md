@@ -15,6 +15,7 @@ crashed service or a pulled cable never leaves the fans stopped.
 [![KiCad 10](https://img.shields.io/badge/KiCad-10-314CB0?logo=kicad&logoColor=white)](https://www.kicad.org/)
 [![MicroPython](https://img.shields.io/badge/MicroPython-RP2040-2B2728?logo=micropython&logoColor=white)](https://micropython.org/)
 [![Status: not yet tested on hardware](https://img.shields.io/badge/hardware-not%20yet%20tested-orange)](#project-status)
+[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/mikagosz)
 
 Designed for small home servers and mini PCs running Proxmox: the machine sits in a
 closed cabinet, its own fan is not enough for the cabinet, and a set of quiet 120 mm
@@ -186,6 +187,12 @@ to **0.6 W each** (for example Noctua NF-P12 redux-1300 PWM):
 Ideas, improvements, a better circuit, a build report or a question — all welcome.
 Open an issue on this repository or write to **support@fractal8.eu**. See
 [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Support the project
+
+FanCtrl3 is built in spare time. If it is useful to you, you can support its
+development through **[GitHub Sponsors](https://github.com/sponsors/mikagosz)** —
+it helps pay for parts and prototype boards.
 
 ## Licence
 

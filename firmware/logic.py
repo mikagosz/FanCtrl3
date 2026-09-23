@@ -16,7 +16,7 @@ Duty values are percent of fan speed (100 = full). main.py inverts them for the
 open-collector / open-drain output.
 """
 
-VERSION = "1.0.8"
+VERSION = "1.0.9"
 NFANS = 3
 
 DEFAULTS = {

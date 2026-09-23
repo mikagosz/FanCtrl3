@@ -2,6 +2,12 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.9] — 2026-09-23
+
+### Documentation
+- GitHub Sponsors: `.github/FUNDING.yml`, a badge and a "Support the project"
+  section in the README.
+
 ## [1.0.8] — 2026-09-23
 
 ### Documentation
