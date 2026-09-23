@@ -231,6 +231,16 @@ def test_config_merge_rejects_garbage():
     assert json.loads(c.config_json())["stale_s"] == 10
 
 
+def test_config_merge_rejects_wrong_list_lengths():
+    cfg = L.merge_config({"min_duty": [10], "enabled": [1, 0], "curve": [[30, 20], [60, 100]]})
+    assert cfg["min_duty"] == [20, 20, 20] and cfg["enabled"] == [1, 1, 1]
+    assert cfg["curve"] == [[30, 20], [60, 100]]   # a curve may have any number of points
+    cfg = L.merge_config({"min_duty": ["a", "b", "c"], "enabled": [1, "x", 0]})
+    assert cfg["min_duty"] == [20, 20, 20] and cfg["enabled"] == [1, 1, 1]
+    c = L.Controller(L.merge_config({"min_duty": [10]}))
+    run(c, 3)                             # must not raise
+
+
 def main():
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

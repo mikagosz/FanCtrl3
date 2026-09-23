@@ -16,7 +16,7 @@ Duty values are percent of fan speed (100 = full). main.py inverts them for the
 open-collector / open-drain output.
 """
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 NFANS = 3
 
 DEFAULTS = {
@@ -40,6 +40,14 @@ DEFAULTS = {
 MODES = ("start", "auto", "rest", "failsafe")
 
 
+PER_FAN = ("min_duty", "enabled")  # one number per fan header
+
+
+def per_fan_ok(v):
+    return (isinstance(v, list) and len(v) == NFANS
+            and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v))
+
+
 def merge_config(saved):
     """Defaults overlaid with a saved config; anything malformed falls back."""
     cfg = {}
@@ -47,6 +55,8 @@ def merge_config(saved):
         cfg[k] = list(v) if isinstance(v, list) else v
     if isinstance(saved, dict):
         for k, v in saved.items():
+            if k in PER_FAN and not per_fan_ok(v):
+                continue
             if k in cfg and type(v) == type(cfg[k]):
                 cfg[k] = v
             elif k in cfg and isinstance(cfg[k], float) and isinstance(v, int):

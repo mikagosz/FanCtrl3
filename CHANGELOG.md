@@ -2,6 +2,13 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.5] — 2026-09-23
+
+### Fixed
+- A saved configuration with `min_duty` or `enabled` of the wrong length (or with
+  non-numeric entries) crashed the control step. Such values are now ignored and
+  the default is kept.
+
 ## [1.0.4] — 2026-09-23
 
 ### Fixed

@@ -350,6 +350,8 @@ over them:
 - Unknown keys are ignored.
 - A value of the wrong type is ignored, and the default is kept. An integer is accepted
   where the default is a floating-point number.
+- `min_duty` and `enabled` must be lists of exactly three numbers; otherwise the
+  default is kept.
 - If the saved curve is invalid, the default curve is used.
 
 **`SAVE`** writes the complete current configuration, including every key, to
