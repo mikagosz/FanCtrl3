@@ -101,6 +101,20 @@ def test_bye_shows_rest_in_status_at_once():
     assert c.command("STATUS", c.last_ms)[0].startswith("STAT mode=rest ")
 
 
+def test_hello_leaves_rest_and_goes_failsafe_without_temp():
+    c = L.Controller(now_ms=0)
+    feed(c, 50, 5)
+    c.command("BYE", c.last_ms)
+    run(c, 60)
+    assert c.mode == "rest"
+    assert c.command("HELLO", c.last_ms) == ["OK HELLO"]
+    run(c, 5)                             # ramp 20 -> 60 % at 10 %/s
+    assert c.mode == "start" and abs(c.duty[0] - 60) < 0.01
+    out = run(c, 26)                      # 31 s after HELLO without a TEMP
+    assert c.mode == "failsafe" and c.duty == [100.0] * 3
+    assert "ALARM TEMP STALE" in out
+
+
 def test_min_duty_floor():
     c = L.Controller(now_ms=0)
     c.command("MIN 2 35", 0)

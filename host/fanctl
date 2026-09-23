@@ -163,6 +163,12 @@ class Daemon:
         self.note(other)
         if reply:
             log(reply)
+        # take the controller out of rest (left by a previous BYE): from now on it
+        # expects TEMP and goes to failsafe if none comes
+        reply, other = self.port.ask("HELLO")
+        self.note(other)
+        if reply != "OK HELLO":
+            log(f"HELLO: {reply}")
 
     def drop_port(self, why):
         log(f"lost the controller: {why}")

@@ -16,7 +16,7 @@ Duty values are percent of fan speed (100 = full). main.py inverts them for the
 open-collector / open-drain output.
 """
 
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 NFANS = 3
 
 DEFAULTS = {
@@ -136,6 +136,17 @@ class Controller:
                 self.rest = True
                 self.mode = "rest"  # like TEMP: the status now, the fans at the next step
                 return ["OK REST"]
+            if cmd == "HELLO":
+                # a host daemon (re)connected: leave rest and start counting towards
+                # failsafe, so a daemon that never sends TEMP cannot leave the fans
+                # at rest duty for good
+                self.rest = False
+                self.cpu = None
+                self.cpu_ms = None
+                self.t_eff = None
+                self.boot_ms = now_ms
+                self.mode = "start"
+                return ["OK HELLO"]
             if cmd in ("STATUS", "STAT"):
                 return [self.status(now_ms)]
             if cmd == "SET":

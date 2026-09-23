@@ -2,6 +2,15 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] — 2026-09-23
+
+### Fixed
+- A daemon restarted on a host without a readable CPU temperature left the fans at
+  rest duty (20 %) for good, because the `BYE` of the previous run put the
+  controller in rest mode, which has no timeout. The daemon now sends the new
+  `HELLO` command whenever it connects: the controller leaves rest and goes to
+  failsafe unless a `TEMP` follows.
+
 ## [1.0.2] — 2026-09-23
 
 ### Fixed

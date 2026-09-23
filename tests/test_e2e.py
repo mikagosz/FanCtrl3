@@ -39,6 +39,9 @@ def set_cpu(c):
     write(os.path.join(hw, "hwmon3", "temp1_input"), str(int(c * 1000)))
 
 
+no_coretemp = os.path.join(tmp, "hwmon-no-coretemp")
+write(os.path.join(no_coretemp, "hwmon0", "name"), "acpitz\n")
+write(os.path.join(no_coretemp, "hwmon0", "temp1_input"), "40000\n")
 write(os.path.join(hw, "hwmon0", "name"), "acpitz\n")
 write(os.path.join(hw, "hwmon0", "temp1_input"), "99000\n")      # decoy
 write(os.path.join(hw, "hwmon3", "name"), "coretemp\n")
@@ -54,10 +57,10 @@ def fanctl(*a, timeout=120):
     return r.stdout + r.stderr
 
 
-def start_daemon():
+def start_daemon(hwmon=None):
     logf = open(os.path.join(tmp, "daemon.log"), "a")
     p = subprocess.Popen([sys.executable, FANCTL, "--device", link, "--socket", sock,
-                          "daemon", "--interval", "1", "--hwmon", hw],
+                          "daemon", "--interval", "1", "--hwmon", hwmon or hw],
                          stdout=logf, stderr=subprocess.STDOUT)
     procs.append(p)
     return p
@@ -128,6 +131,14 @@ try:
     # 5. status straight from the port when no daemon runs
     out = fanctl("status")
     check("fanctl status without the daemon (straight from the port)", "rest" in out, out)
+
+    # 5b. daemon restarted on a host without coretemp: HELLO takes the controller
+    #     out of rest, so it reaches failsafe instead of resting at 20 % for good
+    d = start_daemon(no_coretemp)
+    check("daemon without coretemp after BYE -> HELLO -> failsafe, not rest forever",
+          wait_for(lambda: state()["mode"] == "failsafe", 10), state())
+    d.send_signal(signal.SIGTERM)
+    d.wait(10)
 
     # 6. daemon killed without goodbye -> failsafe after stale_s
     d = start_daemon()

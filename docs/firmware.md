@@ -139,7 +139,7 @@ order, and the first one that applies wins.
 
 | Mode | Condition | Base duty |
 |---|---|---|
-| `rest` | `BYE` received, and no `TEMP` since | `rest_duty` = **20 %** |
+| `rest` | `BYE` received, and no `TEMP` or `HELLO` since | `rest_duty` = **20 %** |
 | `failsafe` | No `TEMP` for more than `stale_s` = **30 s** (counted from power-up if no `TEMP` has ever arrived) | **100 %**, applied immediately with no ramp |
 | `start` | Power-up, before the first `TEMP` | `start_duty` = **60 %** |
 | `auto` | A recent `TEMP` is available | Fan curve, with hysteresis |
@@ -148,8 +148,11 @@ Notes:
 
 - The controller stays in `start` mode for at most 30 s. If no `TEMP` arrives by then,
   it switches to `failsafe`.
-- `rest` has no timeout. It lasts until the next `TEMP` arrives and does not turn into
-  `failsafe`. Use `BYE` for a planned host shutdown.
+- `rest` has no timeout. It lasts until the next `TEMP` or `HELLO` arrives and does not
+  turn into `failsafe`. Use `BYE` for a planned host shutdown.
+- `HELLO` (sent by the host daemon every time it connects) leaves `rest`, forgets the
+  last CPU temperature and restarts the stale timer: the controller is in `start` and
+  goes to `failsafe` unless a `TEMP` arrives within `stale_s`.
 - A valid `TEMP` switches the reported mode to `auto`, and `BYE` to `rest`, at once.
   The fans follow at the next control step.
 
@@ -244,7 +247,8 @@ The controller communicates over USB CDC serial, one text line per command.
 | `PING` | – | `PONG` | Connection test. |
 | `VER` | – | `VER FanCtrl3 <version>` | Firmware version. |
 | `TEMP <t>` | CPU temperature in °C, −20 to 130 | `OK` | Stores the CPU temperature, resets the stale timer, leaves `rest` and sets the mode to `auto`. |
-| `BYE` | – | `OK REST` | Planned host shutdown: `rest` mode (20 %) until the next `TEMP`. |
+| `BYE` | – | `OK REST` | Planned host shutdown: `rest` mode (20 %) until the next `TEMP` or `HELLO`. |
+| `HELLO` | – | `OK HELLO` | A host daemon connected: leaves `rest`, clears the CPU temperature and restarts the stale timer (`start` mode, then `failsafe` if no `TEMP` follows). |
 | `STATUS` or `STAT` | – | `STAT …` | Current state. See [The STAT line](#the-stat-line). |
 | `SET <n> <duty>` | fan, duty 0–100 | `OK` | Puts fan *n* under manual control at the given duty. Out-of-range values are clamped to 0–100. |
 | `SET <n> AUTO` | fan | `OK` | Returns fan *n* to automatic control. |

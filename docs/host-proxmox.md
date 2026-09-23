@@ -37,8 +37,8 @@ host hangs or reboots), the controller keeps driving the fans on its own:
   failure.
 - **Silence without `BYE`.** After 30 s without a temperature, the controller switches
   to failsafe and runs all fans at 100 %.
-- **Daemon restart.** The service restarts the daemon automatically. When temperatures
-  arrive again, the controller returns to the curve.
+- **Daemon restart.** The service restarts the daemon automatically. On connecting it
+  sends `HELLO`; when temperatures arrive again, the controller returns to the curve.
 
 A host restart therefore never stops the cooling.
 
@@ -177,7 +177,9 @@ Behaviour:
   `no controller at /dev/fanctl (<reason>) - waiting` once and retries at every
   interval.
 - **Controller found.** The daemon logs `connected to /dev/fanctl`, sends `VER` and logs
-  the reply, for example `VER FanCtrl3 <version>`.
+  the reply, for example `VER FanCtrl3 <version>`, then sends `HELLO`. `HELLO` takes the
+  controller out of rest mode left by an earlier `BYE`, so a daemon that cannot read a
+  temperature still ends in failsafe (100 %) instead of leaving the fans at 20 %.
 - **Controller lost.** The daemon logs `lost the controller: <reason>` and returns to
   waiting.
 - **No temperature.** If no `coretemp` reading is found, the daemon does not send
