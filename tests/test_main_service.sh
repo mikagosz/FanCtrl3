@@ -22,8 +22,16 @@ check_not "no watchdog in service mode" "$out2" "WDT START"
 check "fans at 100 % in service mode (pins low)" "$out2" "EXIT pwm=\[(0, 0), (2, 0), (4, 0)\]"
 [[ ! -e fanctrl3.service ]] && echo "OK: service flag removed" || { echo "MISSING: flag not removed"; fail=1; }
 
-out3=$( (sleep 3.5; printf 'PING\n'; sleep 0.5) | run )
+out3=$( (sleep 3.5; printf 'PING\nSAVE\n'; sleep 0.5) | run )
 check "the boot after that is normal again" "$out3" "WDT START 8000"
+check "SAVE replies OK after writing" "$out3" "OK SAVE"
+[[ -s fanctrl3.json ]] && echo "OK: config file written" || { echo "MISSING: config file"; fail=1; }
+
+mkdir fanctrl3.json.tmp               # the write cannot succeed now
+out4=$( (sleep 3.5; printf 'SAVE\n'; sleep 0.5) | run )
+check "a failed SAVE says so" "$out4" "ERR SAVE"
+check_not "a failed SAVE does not claim success" "$out4" "OK SAVE"
+rmdir fanctrl3.json.tmp
 cd /
 rm $tmp/*(N) 2>/dev/null
 rmdir $tmp

@@ -16,7 +16,7 @@ Duty values are percent of fan speed (100 = full). main.py inverts them for the
 open-collector / open-drain output.
 """
 
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 NFANS = 3
 
 DEFAULTS = {
@@ -190,8 +190,9 @@ class Controller:
                 self.cfg["curve"] = pts
                 return ["OK"]
             if cmd == "SAVE":
+                # the reply comes from saved(), once the file is actually written
                 self.save_requested = True
-                return ["OK SAVE"]
+                return []
             if cmd == "CONF":
                 return ["CONF " + self.config_json()]
             if cmd == "SERVICE":
@@ -200,6 +201,11 @@ class Controller:
         except (IndexError, ValueError):
             return ["ERR ARGS " + cmd]
         return ["ERR UNKNOWN " + cmd]
+
+    def saved(self, error=None):
+        """Reply to SAVE after the write: call with the error text if it failed."""
+        self.save_requested = False
+        return ["OK SAVE"] if error is None else ["ERR SAVE " + error]
 
     def _fan(self, s):
         n = int(s) - 1

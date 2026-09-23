@@ -214,8 +214,13 @@ def main():
                 elif len(buf) < 120:
                     buf += ch
             if ctl.save_requested:
-                ctl.save_requested = False
-                save_config(ctl.cfg)
+                try:
+                    save_config(ctl.cfg)
+                    replies = ctl.saved()
+                except Exception as e:
+                    replies = ctl.saved(str(e) or type(e).__name__)
+                for line in replies:
+                    write(line)
             if ctl.service_requested:
                 for i in range(logic.NFANS):
                     set_duty(i, 100)

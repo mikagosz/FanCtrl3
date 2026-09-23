@@ -2,6 +2,13 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.6] — 2026-09-23
+
+### Fixed
+- `SAVE` replied `OK SAVE` before the file was written, so a failed write
+  looked like a success (it only showed up as `ERR INTERNAL`). The reply now
+  comes after the write: `OK SAVE`, or `ERR SAVE <reason>`.
+
 ## [1.0.5] — 2026-09-23
 
 ### Fixed

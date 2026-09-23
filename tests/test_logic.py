@@ -214,7 +214,6 @@ def test_commands_and_errors():
     assert c.command("CURVE 30:20 60:100", 0) == ["OK"]
     assert c.cfg["curve"] == [[30.0, 20.0], [60.0, 100.0]]
     assert c.command("", 0) == []
-    assert c.command("SAVE", 0) == ["OK SAVE"] and c.save_requested
     s = c.command("STATUS", 0)[0]
     assert s.startswith("STAT mode=start cpu=- age=- amb=- fault=0 f1=")
 
@@ -229,6 +228,14 @@ def test_config_merge_rejects_garbage():
     c = L.Controller(cfg)
     import json
     assert json.loads(c.config_json())["stale_s"] == 10
+
+
+def test_save_replies_only_after_the_write():
+    c = L.Controller(now_ms=0)
+    assert c.command("SAVE", 0) == [] and c.save_requested
+    assert c.saved() == ["OK SAVE"] and not c.save_requested
+    c.command("SAVE", 0)
+    assert c.saved("no space") == ["ERR SAVE no space"] and not c.save_requested
 
 
 def test_config_merge_rejects_wrong_list_lengths():

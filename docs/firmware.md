@@ -262,7 +262,7 @@ The controller communicates over USB CDC serial, one text line per command.
 | `MIN <n> <duty>` | fan, duty 0–100 | `OK` | Sets the minimum duty of fan *n*, clamped to 0–100 and truncated to an integer. |
 | `ENABLE <n> <v>` | fan, `1` / `on` / `ON` | `OK` | Enables stall detection for fan *n* when *v* is `1`, `on` or `ON`. Any other value disables it. |
 | `CURVE <t:d> <t:d> …` | two or more points | `OK` | Replaces the fan curve. Each point is `temperature:duty`. |
-| `SAVE` | – | `OK SAVE` | Writes the current configuration to the Pico's filesystem. |
+| `SAVE` | – | `OK SAVE` or `ERR SAVE <reason>` | Writes the current configuration to the Pico's filesystem; replies once the write is done. |
 | `CONF` | – | `CONF {…}` | Current configuration as JSON on a single line. |
 | `SERVICE` | – | `OK SERVICE` | Resets the board into service mode. See [Service access](#service-access). |
 
@@ -276,6 +276,7 @@ Changes made with `SET`, `MIN`, `ENABLE` and `CURVE` take effect immediately. On
 |---|---|
 | `ERR ARGS <CMD>` | A required argument is missing or cannot be parsed, or the fan number is not 1–3. `<CMD>` is the command word in upper case. |
 | `ERR UNKNOWN <CMD>` | Unknown command. |
+| `ERR SAVE <reason>` | `SAVE` could not write the configuration file. |
 | `ERR TEMP out of range` | `TEMP` value outside −20 to 130 °C. The value is ignored. |
 | `ERR CURVE need at least 2 points` | `CURVE` with fewer than two points. |
 | `ERR CURVE temperatures must rise` | The point temperatures are not strictly increasing. |
@@ -355,8 +356,9 @@ over them:
 - If the saved curve is invalid, the default curve is used.
 
 **`SAVE`** writes the complete current configuration, including every key, to
-`/fanctrl3.json.tmp` and then renames it to `/fanctrl3.json`. The main loop performs the
-write just after it sends the `OK SAVE` reply. Changes made with `CURVE`, `MIN` and
+`/fanctrl3.json.tmp` and then renames it to `/fanctrl3.json`. The reply comes after the
+write: `OK SAVE` when the file is written, `ERR SAVE <reason>` when it is not (the
+configuration in memory stays as it is; send `SAVE` again). Changes made with `CURVE`, `MIN` and
 `ENABLE` are lost at the next reset unless you save them.
 
 **`CONF`** returns the configuration currently in memory. It may differ from the saved

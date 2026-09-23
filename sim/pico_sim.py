@@ -59,6 +59,7 @@ def rpm_of(i, duty):
 
 
 buf = b""
+saves = 0
 next_step = now_ms() + 1000
 while True:
     r, _, _ = select.select([master], [], [], 0.05)
@@ -72,6 +73,10 @@ while True:
             line, buf = buf.split(b"\n", 1)
             for out in ctl.command(line.decode(errors="replace"), now_ms()):
                 os.write(master, (out + "\n").encode())
+            if ctl.save_requested:  # the simulator keeps its config in memory only
+                saves += 1
+                for out in ctl.saved():
+                    os.write(master, (out + "\n").encode())
     if now_ms() >= next_step:
         next_step += 1000
         rpm = [rpm_of(i, d) for i, d in enumerate(ctl.duty)]
@@ -81,5 +86,5 @@ while True:
             tmp = args.state + ".tmp"
             with open(tmp, "w") as f:
                 json.dump({"mode": ctl.mode, "duty": ctl.duty, "cpu": ctl.cpu,
-                           "min_duty": ctl.cfg["min_duty"], "saved": ctl.save_requested}, f)
+                           "min_duty": ctl.cfg["min_duty"], "saved": saves > 0}, f)
             os.replace(tmp, args.state)
