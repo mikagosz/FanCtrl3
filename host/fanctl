@@ -1,0 +1,417 @@
+#!/usr/bin/env python3
+"""fanctl - host side of FanCtrl3 (Proxmox VE or any Linux host). Standard library only.
+
+  fanctl daemon                service: CPU temperature -> controller every 5 s
+  fanctl status                what the controller reports right now
+  fanctl send COMMAND ...      raw command, e.g. `fanctl send SET 1 40`
+  fanctl calibrate [N]         measure MIN_DUTY of fan N (or all) and save it
+
+The daemon owns the serial port; the other commands talk to it through a unix
+socket. Without a running daemon they open the port themselves.
+
+Temperature: hwmon device named "coretemp", sensor labelled "Package id 0" -
+found by name every time, because hwmon numbers move between boots.
+On SIGTERM (shutdown, `systemctl stop`) the daemon sends BYE, so the controller
+rests at 20 % instead of treating the silence as a failure.
+"""
+import argparse
+import glob
+import json
+import os
+import select
+import signal
+import socket
+import sys
+import termios
+import time
+import tty
+
+DEVICE = "/dev/fanctl"
+SOCKET = "/run/fanctl.sock"
+HWMON = "/sys/class/hwmon"
+INTERVAL = 5.0
+REPLY_TIMEOUT = 2.0
+STATE_REQUEST = "__STATE__"  # asks the daemon itself, not the controller
+
+
+def log(msg):
+    print(msg, flush=True)
+
+
+# --- CPU temperature ---------------------------------------------------------------------
+def cpu_temp(root=HWMON):
+    """Package temperature in degC from coretemp, None if not found."""
+    for hw in sorted(glob.glob(os.path.join(root, "hwmon*"))):
+        try:
+            with open(os.path.join(hw, "name")) as f:
+                if f.read().strip() != "coretemp":
+                    continue
+        except OSError:
+            continue
+        best = None
+        for inp in sorted(glob.glob(os.path.join(hw, "temp*_input"))):
+            try:
+                with open(inp) as f:
+                    t = int(f.read().strip()) / 1000.0
+            except (OSError, ValueError):
+                continue
+            label = inp.replace("_input", "_label")
+            try:
+                with open(label) as f:
+                    if f.read().strip() == "Package id 0":
+                        return t
+            except OSError:
+                pass
+            best = t if best is None else max(best, t)
+        return best  # no package label: hottest core
+    return None
+
+
+# --- serial port (USB CDC; the baud rate does not matter) ------------------------------------
+class Port:
+    def __init__(self, path):
+        self.path = path
+        self.fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        try:
+            tty.setraw(self.fd)
+            attrs = termios.tcgetattr(self.fd)
+            attrs[2] &= ~termios.HUPCL  # do not reset the board when we close
+            termios.tcsetattr(self.fd, termios.TCSANOW, attrs)
+        except termios.error:
+            pass  # a pty in tests
+        self.buf = b""
+
+    def fileno(self):
+        return self.fd
+
+    def send(self, line):
+        os.write(self.fd, (line.strip() + "\n").encode())
+
+    def read_lines(self):
+        """Whatever complete lines are waiting; raises OSError if the device is gone."""
+        try:
+            data = os.read(self.fd, 4096)
+        except BlockingIOError:
+            return []
+        if not data:
+            raise OSError("device closed")
+        self.buf += data
+        lines = []
+        while b"\n" in self.buf:
+            raw, self.buf = self.buf.split(b"\n", 1)
+            s = raw.decode(errors="replace").strip()
+            if s:
+                lines.append(s)
+        return lines
+
+    def ask(self, line, timeout=REPLY_TIMEOUT):
+        """Send a command, return (reply, other lines seen meanwhile)."""
+        self.send(line)
+        other = []
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            r, _, _ = select.select([self.fd], [], [], max(0, end - time.monotonic()))
+            if not r:
+                break
+            for s in self.read_lines():
+                if s.startswith(("ALARM", "INFO", "FanCtrl3", "ERR INTERNAL")):
+                    other.append(s)
+                else:
+                    return s, other
+        return None, other
+
+    def close(self):
+        try:
+            os.close(self.fd)
+        except OSError:
+            pass
+
+
+def parse_stat(line):
+    """'STAT mode=auto cpu=54.0 ... f1=45/820' -> dict."""
+    d = {}
+    for part in line.split()[1:]:
+        if "=" in part:
+            k, v = part.split("=", 1)
+            d[k] = v
+    return d
+
+
+# --- daemon -------------------------------------------------------------------------------------
+class Daemon:
+    def __init__(self, args):
+        self.args = args
+        self.port = None
+        self.clients = []
+        self.status = None      # last STAT line
+        self.alarms = []        # recent alarm/info lines
+        self.stop = False
+        self.missing_logged = False
+
+    def open_port(self):
+        try:
+            self.port = Port(self.args.device)
+        except OSError as e:
+            if not self.missing_logged:
+                log(f"no controller at {self.args.device} ({e.strerror}) - waiting")
+                self.missing_logged = True
+            self.port = None
+            return
+        self.missing_logged = False
+        log(f"connected to {self.args.device}")
+        reply, other = self.port.ask("VER")
+        self.note(other)
+        if reply:
+            log(reply)
+
+    def drop_port(self, why):
+        log(f"lost the controller: {why}")
+        if self.port:
+            self.port.close()
+        self.port = None
+
+    def note(self, lines):
+        for s in lines:
+            if s.startswith(("ALARM", "INFO", "ERR")):
+                log(s)
+                self.alarms = (self.alarms + [f"{time.strftime('%H:%M:%S')} {s}"])[-20:]
+
+    def step(self):
+        """Every INTERVAL: temperature to the controller, fresh status back."""
+        if self.port is None:
+            self.open_port()
+            if self.port is None:
+                return
+        t = cpu_temp(self.args.hwmon)
+        try:
+            if t is None:
+                log("no coretemp reading - not sending TEMP (the controller goes to 100% after 30 s)")
+            else:
+                reply, other = self.port.ask(f"TEMP {t:.1f}")
+                self.note(other)
+                if reply != "OK":
+                    log(f"TEMP {t:.1f}: {reply}")
+            reply, other = self.port.ask("STATUS")
+            self.note(other)
+            if reply and reply.startswith("STAT"):
+                self.status = reply
+        except OSError as e:
+            self.drop_port(e)
+
+    def serve_client(self, conn):
+        try:
+            req = conn.recv(1024).decode().strip()
+        except OSError:
+            conn.close()
+            return
+        if req == STATE_REQUEST:
+            ans = {"status": self.status, "alarms": self.alarms,
+                   "connected": self.port is not None}
+        elif self.port is None:
+            ans = {"reply": None, "error": "no controller"}
+        else:
+            try:
+                reply, other = self.port.ask(req, timeout=self.args.reply_timeout)
+                self.note(other)
+                ans = {"reply": reply}
+            except OSError as e:
+                self.drop_port(e)
+                ans = {"reply": None, "error": str(e)}
+        try:
+            conn.sendall(json.dumps(ans).encode())
+        except OSError:
+            pass
+        conn.close()
+
+    def run(self):
+        signal.signal(signal.SIGTERM, lambda *a: setattr(self, "stop", True))
+        signal.signal(signal.SIGINT, lambda *a: setattr(self, "stop", True))
+        try:
+            os.unlink(self.args.socket)
+        except FileNotFoundError:
+            pass
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(self.args.socket)
+        os.chmod(self.args.socket, 0o660)
+        srv.listen(4)
+        log(f"fanctl daemon: {self.args.device}, every {self.args.interval:g} s")
+        next_step = time.monotonic()
+        while not self.stop:
+            now = time.monotonic()
+            if now >= next_step:
+                self.step()
+                next_step = now + self.args.interval
+            watch = [srv] + ([self.port] if self.port else [])
+            try:
+                r, _, _ = select.select(watch, [], [], max(0.05, next_step - time.monotonic()))
+            except InterruptedError:
+                continue
+            if srv in r:
+                conn, _ = srv.accept()
+                self.serve_client(conn)
+            if self.port and self.port in r:
+                try:
+                    self.note(self.port.read_lines())
+                except OSError as e:
+                    self.drop_port(e)
+        # clean goodbye: rest at 20 % instead of failsafe
+        if self.port:
+            try:
+                reply, _ = self.port.ask("BYE")
+                log(f"BYE -> {reply}")
+            except OSError:
+                pass
+            self.port.close()
+        srv.close()
+        try:
+            os.unlink(self.args.socket)
+        except FileNotFoundError:
+            pass
+        log("fanctl daemon: stopped")
+
+
+# --- client side ------------------------------------------------------------------------------------
+def via_daemon(args, request):
+    """Ask the daemon; None if it is not running."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(args.reply_timeout + 3)
+    try:
+        s.connect(args.socket)
+    except OSError:
+        return None
+    s.sendall(request.encode())
+    data = b""
+    while True:
+        chunk = s.recv(65536)
+        if not chunk:
+            break
+        data += chunk
+    s.close()
+    return json.loads(data.decode())
+
+
+def command(args, line):
+    """Reply to one command, through the daemon or straight to the port."""
+    ans = via_daemon(args, line)
+    if ans is not None:
+        if ans.get("error"):
+            sys.exit(f"error: {ans['error']}")
+        return ans.get("reply")
+    port = Port(args.device)
+    try:
+        reply, _ = port.ask(line, timeout=args.reply_timeout)
+        return reply
+    finally:
+        port.close()
+
+
+def show_status(args):
+    ans = via_daemon(args, STATE_REQUEST)
+    alarms = []
+    if ans is not None:
+        line = ans.get("status")
+        alarms = ans.get("alarms", [])
+        if not ans.get("connected"):
+            print("the daemon is running, but the controller is not connected")
+    else:
+        line = command(args, "STATUS")
+    if not line:
+        sys.exit("no reply from the controller")
+    d = parse_stat(line)
+    names = {"auto": "curve", "start": "start (waiting for the first temperature)",
+             "rest": "rest after BYE", "failsafe": "FAILSAFE 100% (no temperature)"}
+    print(f"mode:        {names.get(d.get('mode'), d.get('mode'))}")
+    print(f"CPU:         {d.get('cpu')} °C ({d.get('age')} s ago)")
+    print(f"ambient:     {d.get('amb')} °C")
+    print(f"USB overload: {'YES' if d.get('fault') == '1' else 'no'}")
+    for i in (1, 2, 3):
+        v = d.get(f"f{i}", "?/?")
+        duty, rpm = v.split("/")
+        man = " (manual)" if duty.endswith("m") else ""
+        print(f"fan {i}:       {duty.rstrip('m'):>3}%  {rpm:>5} rpm{man}")
+    if alarms:
+        print("recent messages:")
+        for a in alarms[-5:]:
+            print("  " + a)
+
+
+def calibrate(args):
+    """Lowest duty at which each fan still turns, plus a margin -> MIN, SAVE."""
+    fans = [args.n] if args.n else [1, 2, 3]
+    steps = list(range(60, -1, -5))
+    conf = command(args, "CONF") or ""
+    if not conf.startswith("CONF "):
+        sys.exit(f"the controller did not return its configuration: {conf}")
+    before = json.loads(conf[5:])["min_duty"]
+    for n in fans:
+        print(f"fan {n}: stepping the duty down 60% -> 0% in 5% steps, {args.settle:g} s per step")
+        lowest = None
+        done = False
+        try:
+            # MIN 0 so the controller lets us go that low while measuring
+            command(args, f"MIN {n} 0")
+            for pct in steps:
+                command(args, f"SET {n} {pct}")
+                # the controller ramps down at 2 %/s - wait until it gets there,
+                # only then give the fan time to settle
+                end = time.monotonic() + 30
+                while time.monotonic() < end:
+                    d = parse_stat(command(args, "STATUS") or "STAT")
+                    duty = d.get(f"f{n}", "0/0").split("/")[0].rstrip("m")
+                    if abs(int(duty) - pct) <= 1:
+                        break
+                    time.sleep(0.5)
+                time.sleep(args.settle)
+                d = parse_stat(command(args, "STATUS") or "STAT")
+                rpm = int(d.get(f"f{n}", "0/0").split("/")[1])
+                print(f"  {pct:3d}% -> {rpm} rpm")
+                if rpm > 0:
+                    lowest = pct
+                else:
+                    break
+            done = True
+        finally:
+            command(args, f"SET {n} AUTO")
+            if not done or lowest is None:
+                # interrupted or the fan never turned: put the old minimum back
+                command(args, f"MIN {n} {before[n - 1]}")
+        if lowest is None:
+            print(f"  fan {n} does not spin even at 60% - is it connected? "
+                  f"MIN stays at {before[n - 1]}%")
+            continue
+        chosen = min(100, lowest + args.margin)
+        command(args, f"MIN {n} {chosen}")
+        print(f"  lowest working duty: {lowest}% -> MIN {chosen}% (margin {args.margin})")
+    print("save:", command(args, "SAVE"))
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="fanctl", description=__doc__.split("\n\n")[0])
+    ap.add_argument("--device", default=os.environ.get("FANCTL_DEVICE", DEVICE))
+    ap.add_argument("--socket", default=os.environ.get("FANCTL_SOCKET", SOCKET))
+    ap.add_argument("--reply-timeout", type=float, default=REPLY_TIMEOUT)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    d = sub.add_parser("daemon", help="run the service loop")
+    d.add_argument("--interval", type=float, default=INTERVAL, help="seconds between updates")
+    d.add_argument("--hwmon", default=HWMON, help="hwmon directory (for tests)")
+    sub.add_parser("status", help="show what the controller reports")
+    w = sub.add_parser("send", help="send one raw protocol command")
+    w.add_argument("words", nargs="+")
+    k = sub.add_parser("calibrate", help="measure and store the minimum duty of the fans")
+    k.add_argument("n", type=int, nargs="?", choices=[1, 2, 3])
+    k.add_argument("--settle", type=float, default=6.0, help="seconds per step")
+    k.add_argument("--margin", type=int, default=5, help="margin above the minimum, %%")
+    args = ap.parse_args()
+
+    if args.cmd == "daemon":
+        Daemon(args).run()
+    elif args.cmd == "status":
+        show_status(args)
+    elif args.cmd == "send":
+        print(command(args, " ".join(args.words)))
+    elif args.cmd == "calibrate":
+        calibrate(args)
+
+
+if __name__ == "__main__":
+    main()

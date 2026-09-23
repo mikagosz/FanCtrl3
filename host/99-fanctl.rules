@@ -1,0 +1,5 @@
+# FanCtrl3: Raspberry Pi Pico running MicroPython (VID 2e8a, PID 0005) -> /dev/fanctl
+# /dev/ttyACMx changes when USB is replugged; the symlink stays.
+# If the host has a second MicroPython Pico attached, add ATTRS{serial}=="..."
+# (read it with: udevadm info -a -n /dev/ttyACM0 | grep serial).
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0005", SYMLINK+="fanctl", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1"

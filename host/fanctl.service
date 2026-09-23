@@ -1,0 +1,14 @@
+[Unit]
+Description=FanCtrl3 - CPU temperature to the fan controller
+After=systemd-udevd.service
+
+[Service]
+ExecStart=/usr/local/bin/fanctl daemon
+# stop = SIGTERM -> the daemon sends BYE, the controller rests at 20 % instead of failsafe
+KillSignal=SIGTERM
+TimeoutStopSec=10
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
