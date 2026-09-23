@@ -16,8 +16,9 @@ Nothing blocks: stdin is polled, tach pulses are counted in IRQs, and the contro
 step runs every second from the main loop.
 Ctrl-C from the host is ignored (micropython.kbd_intr(-1)), otherwise one stray
 byte would stop the program and freeze the fans. Service access: the first
-SERVICE_WINDOW_MS after power-up still accept Ctrl-C (mpremote), or send SERVICE.
-A hardware watchdog restarts the board if the loop ever hangs.
+SERVICE_WINDOW_MS after power-up still accept Ctrl-C (mpremote), or send SERVICE:
+the board resets into service mode - fans at 100 %, REPL, no watchdog - until the
+next reset. A hardware watchdog restarts the board if the loop ever hangs.
 """
 import json
 import sys
@@ -30,7 +31,9 @@ from machine import PWM, Pin
 
 import logic
 
-CONFIG_FILE = "/fanctrl3.json"
+# relative to the working directory, which is the filesystem root on the Pico
+CONFIG_FILE = "fanctrl3.json"
+SERVICE_FLAG = "fanctrl3.service"
 SERVICE_WINDOW_MS = 3000
 PWM_FREQ = 25000
 PWM_PINS = (0, 2, 4)
@@ -159,7 +162,27 @@ def blink(mode, now):
     led.value(1 if on else 0)
 
 
+def service_boot():
+    """Boot after SERVICE: fans at 100 %, REPL, no watchdog. True if this is one.
+
+    The RP2040 watchdog cannot be stopped once started, so SERVICE does not drop
+    to the REPL from the running program - it leaves a flag and resets instead."""
+    import os
+    try:
+        os.remove(SERVICE_FLAG)
+    except OSError:
+        return False
+    for i in range(logic.NFANS):
+        set_duty(i, 100)
+    en_pin.value(1)
+    led.value(1)
+    write("FanCtrl3 %s service mode: REPL, fans at 100%%, reset to resume" % logic.VERSION)
+    return True
+
+
 def main():
+    if service_boot():
+        return
     ctl = logic.Controller(load_config(), now_ms())
     for i in range(logic.NFANS):
         set_duty(i, ctl.duty[i])
@@ -194,11 +217,12 @@ def main():
                 ctl.save_requested = False
                 save_config(ctl.cfg)
             if ctl.service_requested:
-                micropython.kbd_intr(3)
                 for i in range(logic.NFANS):
                     set_duty(i, 100)
-                write("SERVICE: REPL, fans at 100%")
-                return
+                with open(SERVICE_FLAG, "w") as f:
+                    f.write("1")
+                write("SERVICE: resetting into service mode")
+                machine.reset()
 
             now = now_ms()
             a = amb.poll(now)

@@ -42,6 +42,7 @@ class PWM:
 class WDT:
     def __init__(self, timeout=0):
         pwm_log["wdt"] = timeout
+        sys.stdout.write("WDT START %d\n" % timeout)
 
     def feed(self):
         if time.ticks_diff(time.ticks_ms(), _start) > RUN_S * 1000:
@@ -57,3 +58,16 @@ def disable_irq():
 
 def enable_irq(s):
     pass
+
+
+def reset():
+    sys.stdout.write("RESET\n")
+    raise SystemExit
+
+
+def _report_pins():
+    pins = sorted((k, v) for k, v in pwm_log.items() if isinstance(k, int))
+    sys.stdout.write("EXIT pwm=%s\n" % pins)
+
+
+sys.atexit(_report_pins)

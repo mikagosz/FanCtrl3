@@ -2,6 +2,14 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-09-23
+
+### Fixed
+- `SERVICE` no longer drops to the REPL with the watchdog still running (the
+  RP2040 watchdog cannot be stopped, so the board reset about 8 s later). It now
+  resets into a service mode — fans at 100 %, REPL, no watchdog — until the next
+  reset.
+
 ## [1.0.0] — 2026-09-23
 
 First complete design. **Not yet tested on hardware** — hardware testing is coming soon.

@@ -85,10 +85,12 @@ leave the fans without control. You can reach the MicroPython REPL (and therefor
 | Method | How it works |
 |---|---|
 | **Service window** | For the first **3000 ms** after power-up (`SERVICE_WINDOW_MS`), Ctrl-C still works. During this window the firmware prints the banner `FanCtrl3 <version> start` and waits. The fans run at the start duty. The control loop and the watchdog have not started yet, and commands are not processed. Run `flash.sh` (or any `mpremote` command) right after you connect or reset the board. |
-| **`SERVICE` command** | The controller replies `OK SERVICE`, enables Ctrl-C again, sets all three fans to 100 %, prints `SERVICE: REPL, fans at 100%` and ends the control program. The board is then at the MicroPython REPL. Send it with `fanctl send SERVICE` from the host. |
+| **`SERVICE` command** | The controller replies `OK SERVICE`, sets all three fans to 100 %, prints `SERVICE: resetting into service mode`, leaves a flag file (`fanctrl3.service`) and resets. The next boot finds the flag, removes it, keeps the fans at 100 %, prints `FanCtrl3 <version> service mode: REPL, fans at 100%, reset to resume` and stays at the MicroPython REPL — **without starting the watchdog**. Send it with `fanctl send SERVICE` from the host. |
 
-After `SERVICE` the control loop stops running. Reset or power-cycle the board to resume
-normal operation. `flash.sh` resets the board when it finishes.
+The reset is deliberate: the RP2040 watchdog cannot be stopped once it runs, so the
+firmware never drops to the REPL from the running control loop. Service mode lasts
+until the next reset or power-cycle; `flash.sh` resets the board when it finishes, and
+the board then starts normally.
 
 ## Pinout
 
@@ -252,7 +254,7 @@ The controller communicates over USB CDC serial, one text line per command.
 | `CURVE <t:d> <t:d> …` | two or more points | `OK` | Replaces the fan curve. Each point is `temperature:duty`. |
 | `SAVE` | – | `OK SAVE` | Writes the current configuration to the Pico's filesystem. |
 | `CONF` | – | `CONF {…}` | Current configuration as JSON on a single line. |
-| `SERVICE` | – | `OK SERVICE` | Ends the control program. See [Service access](#service-access). |
+| `SERVICE` | – | `OK SERVICE` | Resets the board into service mode. See [Service access](#service-access). |
 
 Changes made with `SET`, `MIN`, `ENABLE` and `CURVE` take effect immediately. Only
 `MIN`, `ENABLE` and `CURVE` are part of the configuration that `SAVE` stores. Manual
@@ -318,7 +320,8 @@ The controller sends these lines without being asked:
 | `ALARM FAULT` / `INFO FAULT OK` | TPS2553 fault input becomes active / inactive. |
 | `ALARM FANn STALL` / `INFO FANn OK` | Fan *n* stalls / recovers (see [Stall detection](#stall-detection)). |
 | `ERR INTERNAL <error>` | An exception occurred in the main loop (see [Watchdog and error handling](#watchdog-and-error-handling)). |
-| `SERVICE: REPL, fans at 100%` | After `SERVICE`, just before the control program ends. |
+| `SERVICE: resetting into service mode` | After `SERVICE`, just before the reset. |
+| `FanCtrl3 <version> service mode: REPL, fans at 100%, reset to resume` | At the boot after `SERVICE`. |
 
 Each alarm is reported once when the condition starts, and once more (as `INFO`) when
 it ends.
