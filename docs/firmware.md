@@ -150,8 +150,8 @@ Notes:
   it switches to `failsafe`.
 - `rest` has no timeout. It lasts until the next `TEMP` arrives and does not turn into
   `failsafe`. Use `BYE` for a planned host shutdown.
-- A valid `TEMP` switches the reported mode to `auto` at once. The fans follow at the
-  next control step.
+- A valid `TEMP` switches the reported mode to `auto`, and `BYE` to `rest`, at once.
+  The fans follow at the next control step.
 
 ### Fan curve
 
@@ -300,7 +300,7 @@ STAT mode=auto cpu=54.0 age=3 amb=27.5 fault=0 f1=54/728 f2=54m/728 f3=54/728
 
 | Field | Meaning |
 |---|---|
-| `mode` | `start`, `auto`, `rest` or `failsafe`. Updated at each control step, except that a valid `TEMP` switches it to `auto` at once. |
+| `mode` | `start`, `auto`, `rest` or `failsafe`. Updated at each control step, except that a valid `TEMP` switches it to `auto` and `BYE` to `rest` at once. |
 | `cpu` | Last CPU temperature received with `TEMP`, one decimal place. `-` if none has been received. |
 | `age` | Whole seconds since the last `TEMP`. `-` if none has been received. |
 | `amb` | Ambient temperature from the DS18B20, one decimal place. `-` if there is no valid reading. |

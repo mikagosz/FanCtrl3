@@ -94,6 +94,13 @@ def test_bye_rests_at_20_forever():
     assert c.mode == "auto"
 
 
+def test_bye_shows_rest_in_status_at_once():
+    c = L.Controller(now_ms=0)
+    feed(c, 50, 5)
+    assert c.command("BYE", c.last_ms) == ["OK REST"]
+    assert c.command("STATUS", c.last_ms)[0].startswith("STAT mode=rest ")
+
+
 def test_min_duty_floor():
     c = L.Controller(now_ms=0)
     c.command("MIN 2 35", 0)

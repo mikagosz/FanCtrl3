@@ -16,7 +16,7 @@ Duty values are percent of fan speed (100 = full). main.py inverts them for the
 open-collector / open-drain output.
 """
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 NFANS = 3
 
 DEFAULTS = {
@@ -134,6 +134,7 @@ class Controller:
                 return ["OK"]
             if cmd == "BYE":
                 self.rest = True
+                self.mode = "rest"  # like TEMP: the status now, the fans at the next step
                 return ["OK REST"]
             if cmd in ("STATUS", "STAT"):
                 return [self.status(now_ms)]

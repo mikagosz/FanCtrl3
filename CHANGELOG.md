@@ -2,6 +2,12 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] — 2026-09-23
+
+### Fixed
+- `STATUS` right after `BYE` reported the previous mode until the next control
+  step; it now reports `rest` at once, the same way `TEMP` reports `auto`.
+
 ## [1.0.1] — 2026-09-23
 
 ### Fixed
