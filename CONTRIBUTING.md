@@ -3,6 +3,9 @@
 Thank you for your interest in FanCtrl3. Ideas, improvements and questions are
 genuinely welcome — especially from anyone who builds one.
 
+FanCtrl3 is a hobby project, developed in spare time. Replies and updates may take
+a while — thank you for your patience.
+
 ## Get in touch
 
 - **Issues** on this repository — bug reports, questions, build reports, ideas.

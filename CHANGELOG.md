@@ -2,6 +2,12 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.8] — 2026-09-23
+
+### Documentation
+- README: what is verified without hardware, what is not tested yet, known
+  issues; note that FanCtrl3 is a hobby project developed in spare time.
+
 ## [1.0.7] — 2026-09-23
 
 ### Fixed

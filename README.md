@@ -20,26 +20,50 @@ Designed for small home servers and mini PCs running Proxmox: the machine sits i
 closed cabinet, its own fan is not enough for the cabinet, and a set of quiet 120 mm
 fans should spin up only when the server actually works.
 
+> [!NOTE]
+> FanCtrl3 is a hobby project, built in spare time. Updates may not come often —
+> but ideas, questions and build reports are always welcome (see
+> [Contact and contributions](#contact-and-contributions)).
+
 ---
 
 ## Project status
 
 > [!WARNING]
 > **FanCtrl3 has not been tested on real hardware yet.** Hardware testing is coming
-> soon; this section will be updated with the results.
->
-> What is verified today, without hardware:
-> - both schematics pass KiCad ERC with 0 errors and 0 warnings; the Pro PCB passes
->   DRC with 0 violations, 0 unconnected pads and 0 schematic-parity issues;
-> - the perfboard layout of the Lite variant passes its own connectivity checker
->   (every net connected, no hole shared by two nets, no overlapping parts);
-> - the enclosure has 0 collisions with the component bodies, for both variants;
-> - the control logic passes 14 unit tests under both CPython and MicroPython, the
->   real `main.py` runs under MicroPython on stubbed hardware, and the host daemon
->   passes 10 end-to-end tests against a simulated controller.
->
-> Until the first boards have run for a while, treat this as a reviewed design,
-> not a proven product.
+> soon; this section will be updated with the results. Until the first boards have
+> run for a while, treat this as a reviewed design, not a proven product.
+
+### Verified without hardware
+
+| Area | How | Result |
+|---|---|---|
+| Schematics | KiCad ERC, both variants | 0 errors, 0 warnings |
+| Pro PCB | KiCad DRC with schematic parity | 0 violations, 0 unconnected pads, 0 parity issues |
+| Lite perfboard | the generator's own checker | every net connected, no hole shared by two nets, no wire through a foreign pad, no overlapping parts |
+| Enclosure | intersection of the enclosure with the component bodies | 0 collisions, both variants |
+| Control logic | 21 unit tests, run under CPython **and** MicroPython | all pass |
+| Firmware `main.py` | runs under the MicroPython unix port on stubbed hardware: replies, 25 kHz inverted PWM, watchdog; `SERVICE` and service mode; `SAVE` success and failure (12 checks) | all pass |
+| Host daemon and CLI | 13 end-to-end tests against a simulated controller: sensor selection, curve, `status`, `send`, `calibrate` (incl. a dead fan and failsafe), clean stop, restart without a temperature, crash → failsafe | all pass |
+
+### Not tested yet
+
+- Anything on a real board: soldering, the 12 V rail, the current limiter and its
+  `FAULT` signal, real fan speeds from the tachometers, the DS18B20 probe, the LED,
+  the watchdog, USB behaviour with and without a host.
+- Power drawn from a real USB port with three fans at 100 %.
+- The udev rule on a real Pico (`2e8a:0005` is MicroPython's default ID).
+- Printing and fitting the enclosure; the Lite mounting-hole positions.
+
+### Known issues
+
+- `fanctl send` prints `None` when the controller does not reply, and without a
+  daemon a missing device ends in a Python traceback instead of a short message.
+- On hosts with more than one CPU package only the first `coretemp` device is read.
+- The firmware comment on the LED patterns does not match the code;
+  [docs/firmware.md](docs/firmware.md#status-led) describes the real behaviour.
+- `tests/test_main_smoke.sh` depends on timing and can fail on a heavily loaded
+  machine; run it again before looking for a bug.
 
 ## Features
 
