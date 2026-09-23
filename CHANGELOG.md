@@ -2,6 +2,16 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.7] — 2026-09-23
+
+### Fixed
+- `fanctl calibrate` without a running daemon: once the controller was in
+  failsafe it forced every fan to 100 %, the calibration took minutes and stored
+  a wrong minimum. It now refuses to start in failsafe and stops, keeping the old
+  minimum, when the controller does not follow the requested duty.
+- `fanctl calibrate` sent `SAVE` even when nothing was measured, which also stored
+  any other unsaved changes. It now saves only when a new minimum was measured.
+
 ## [1.0.6] — 2026-09-23
 
 ### Fixed

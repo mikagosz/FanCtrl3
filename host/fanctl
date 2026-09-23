@@ -341,54 +341,76 @@ def show_status(args):
             print("  " + a)
 
 
+class NotFollowing(Exception):
+    """The controller does not drive the fan at the requested duty."""
+
+
 def calibrate(args):
     """Lowest duty at which each fan still turns, plus a margin -> MIN, SAVE."""
     fans = [args.n] if args.n else [1, 2, 3]
-    steps = list(range(60, -1, -5))
     conf = command(args, "CONF") or ""
     if not conf.startswith("CONF "):
         sys.exit(f"the controller did not return its configuration: {conf}")
     before = json.loads(conf[5:])["min_duty"]
+    mode = parse_stat(command(args, "STATUS") or "STAT").get("mode")
+    if mode == "failsafe":
+        sys.exit("the controller is in failsafe (no CPU temperature), so it runs every fan "
+                 "at 100 % - start the daemon (systemctl start fanctl) and calibrate again")
+    changed = False
     for n in fans:
         print(f"fan {n}: stepping the duty down 60% -> 0% in 5% steps, {args.settle:g} s per step")
-        lowest = None
-        done = False
         try:
-            # MIN 0 so the controller lets us go that low while measuring
-            command(args, f"MIN {n} 0")
-            for pct in steps:
-                command(args, f"SET {n} {pct}")
-                # the controller ramps down at 2 %/s - wait until it gets there,
-                # only then give the fan time to settle
-                end = time.monotonic() + 30
-                while time.monotonic() < end:
-                    d = parse_stat(command(args, "STATUS") or "STAT")
-                    duty = d.get(f"f{n}", "0/0").split("/")[0].rstrip("m")
-                    if abs(int(duty) - pct) <= 1:
-                        break
-                    time.sleep(0.5)
-                time.sleep(args.settle)
-                d = parse_stat(command(args, "STATUS") or "STAT")
-                rpm = int(d.get(f"f{n}", "0/0").split("/")[1])
-                print(f"  {pct:3d}% -> {rpm} rpm")
-                if rpm > 0:
-                    lowest = pct
-                else:
-                    break
-            done = True
+            lowest = measure_lowest(args, n)
+        except NotFollowing as e:
+            print(f"  the controller does not follow the requested duty ({e}) - "
+                  f"calibration stopped, MIN of fan {n} stays at {before[n - 1]}%")
+            break
         finally:
+            # back to automatic control; the old minimum stays until a new one is chosen
             command(args, f"SET {n} AUTO")
-            if not done or lowest is None:
-                # interrupted or the fan never turned: put the old minimum back
-                command(args, f"MIN {n} {before[n - 1]}")
+            command(args, f"MIN {n} {before[n - 1]}")
         if lowest is None:
             print(f"  fan {n} does not spin even at 60% - is it connected? "
                   f"MIN stays at {before[n - 1]}%")
             continue
         chosen = min(100, lowest + args.margin)
         command(args, f"MIN {n} {chosen}")
+        changed = True
         print(f"  lowest working duty: {lowest}% -> MIN {chosen}% (margin {args.margin})")
-    print("save:", command(args, "SAVE"))
+    if changed:
+        print("save:", command(args, "SAVE"))
+    else:
+        print("nothing measured - nothing saved")
+
+
+def measure_lowest(args, n):
+    """Step fan n down from 60 % to 0 %; the lowest duty it still turns at, or None."""
+    lowest = None
+    # MIN 0 so the controller lets us go that low while measuring
+    command(args, f"MIN {n} 0")
+    for pct in range(60, -1, -5):
+        command(args, f"SET {n} {pct}")
+        # the controller ramps down at 2 %/s - wait until it gets there,
+        # only then give the fan time to settle
+        end = time.monotonic() + 30
+        while True:
+            d = parse_stat(command(args, "STATUS") or "STAT")
+            duty = d.get(f"f{n}", "0/0").split("/")[0].rstrip("m")
+            if abs(int(duty) - pct) <= 1:
+                break
+            if time.monotonic() >= end or d.get("mode") == "failsafe":
+                # failsafe or a hot ambient override: a measurement now would be wrong
+                raise NotFollowing(f"mode={d.get('mode')} ambient={d.get('amb')} "
+                                   f"duty={duty}% instead of {pct}%")
+            time.sleep(0.5)
+        time.sleep(args.settle)
+        d = parse_stat(command(args, "STATUS") or "STAT")
+        rpm = int(d.get(f"f{n}", "0/0").split("/")[1])
+        print(f"  {pct:3d}% -> {rpm} rpm")
+        if rpm == 0:
+            break
+        lowest = pct
+    return lowest
 
 
 def main():

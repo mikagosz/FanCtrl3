@@ -52,8 +52,11 @@ set_cpu(38)
 
 
 def fanctl(*a, timeout=120):
-    r = subprocess.run([sys.executable, FANCTL, "--device", link, "--socket", sock, *a],
-                       capture_output=True, text=True, timeout=timeout)
+    try:
+        r = subprocess.run([sys.executable, FANCTL, "--device", link, "--socket", sock, *a],
+                           capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return "TIMEOUT after %d s" % timeout
     return r.stdout + r.stderr
 
 
@@ -96,7 +99,7 @@ try:
     check("daemon waits for a missing device without crashing",
           d.poll() is None and "no controller" in log, log)
 
-    sim = subprocess.Popen([sys.executable, SIM, "--stale", "4", "--link", link,
+    sim = subprocess.Popen([sys.executable, SIM, "--stale", "4", "--link", link, "--dead", "3",
                             "--state", state_file], stdout=subprocess.PIPE, text=True)
     procs.append(sim)
     sim.stdout.readline()
@@ -118,6 +121,14 @@ try:
     out = fanctl("calibrate", "1", "--settle", "3", timeout=200)
     ok = wait_for(lambda: state()["min_duty"][0] == 25 and state()["saved"], 3)
     check("calibrate: fan 1 MIN = 25%% and saved (%s)" % state()["min_duty"], ok, out)
+
+    # 3b. a fan that never turns: nothing measured -> old MIN kept, nothing saved
+    saves = state()["saves"]
+    out = fanctl("calibrate", "3", "--settle", "1", timeout=200)
+    check("calibrate a dead fan: MIN kept, no SAVE",
+          "does not spin" in out and "nothing saved" in out
+          and wait_for(lambda: state()["min_duty"][2] == 20, 3)
+          and state()["saves"] == saves, (out, state()))
 
     # 4. clean stop -> BYE -> rest 20 %
     d.send_signal(signal.SIGTERM)
@@ -148,6 +159,14 @@ try:
     check("kill -9 of the daemon -> failsafe 100% after 4 s",
           wait_for(lambda: state()["mode"] == "failsafe" and state()["duty"] == [100.0] * 3, 8),
           state())
+
+    # 7. calibrate without the daemon while in failsafe: refuse, change nothing
+    saves = state()["saves"]
+    out = fanctl("calibrate", "2", "--settle", "1", timeout=30)
+    check("calibrate in failsafe refuses and changes nothing",
+          "failsafe" in out and "Traceback" not in out
+          and wait_for(lambda: state()["min_duty"][1] == 20, 3)
+          and state()["saves"] == saves, (out, state()))
 finally:
     for p in procs:
         if p.poll() is None:

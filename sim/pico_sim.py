@@ -86,5 +86,5 @@ while True:
             tmp = args.state + ".tmp"
             with open(tmp, "w") as f:
                 json.dump({"mode": ctl.mode, "duty": ctl.duty, "cpu": ctl.cpu,
-                           "min_duty": ctl.cfg["min_duty"], "saved": saves > 0}, f)
+                           "min_duty": ctl.cfg["min_duty"], "saved": saves > 0, "saves": saves}, f)
             os.replace(tmp, args.state)

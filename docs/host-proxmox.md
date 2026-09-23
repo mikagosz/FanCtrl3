@@ -281,7 +281,9 @@ For each fan, the tool:
 5. sets the minimum to the lowest duty at which the fan still turned, plus the margin
    (at most 100 %).
 
-When all fans are done, the tool sends `SAVE` so the new minimums survive a restart.
+When all fans are done, the tool sends `SAVE` so the new minimums survive a restart —
+only if at least one new minimum was measured; otherwise it prints
+`nothing measured - nothing saved`.
 
 If the fan does not turn even at 60 %, or the measurement is interrupted, the tool
 restores the fan's previous minimum.
@@ -306,10 +308,10 @@ For a fan that does not turn:
 ```
 
 > [!NOTE]
-> The controller's safety rules still apply during calibration. If the ambient
-> temperature is at or above 40 °C, or the controller is in failsafe, it raises the duty
-> regardless of the requested value, and the result does not reflect the fan's real
-> minimum.
+> The controller's safety rules still apply during calibration. `calibrate` refuses to
+> start while the controller is in failsafe (no temperature — start the daemon first),
+> and it stops, keeping the old minimum, when the controller does not follow the
+> requested duty within 30 s (failsafe or a hot-ambient override).
 
 > [!NOTE]
 > `SAVE` stores the controller's complete configuration, including any other unsaved
