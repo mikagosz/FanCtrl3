@@ -15,7 +15,8 @@ crashed service or a pulled cable never leaves the fans stopped.
 [![KiCad 10](https://img.shields.io/badge/KiCad-10-314CB0?logo=kicad&logoColor=white)](https://www.kicad.org/)
 [![MicroPython](https://img.shields.io/badge/MicroPython-RP2040-2B2728?logo=micropython&logoColor=white)](https://micropython.org/)
 [![Status: not yet tested on hardware](https://img.shields.io/badge/hardware-not%20yet%20tested-orange)](#project-status)
-[![Sponsor](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/mikagosz)
+
+<a href="https://github.com/sponsors/mikagosz"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white" height="40" alt="Sponsor on GitHub Sponsors"></a>
 
 Designed for small home servers and mini PCs running Proxmox: the machine sits in a
 closed cabinet, its own fan is not enough for the cabinet, and a set of quiet 120 mm
