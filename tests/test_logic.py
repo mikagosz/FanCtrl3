@@ -135,6 +135,34 @@ def test_ambient_overrides_host():
     assert "INFO AMB OK" in out
 
 
+def test_ambient_warn_to_normal_reports_ok():
+    c = L.Controller(now_ms=0)
+    feed(c, 38, 30)
+    assert feed(c, 38, 1, amb=41.0) == ["ALARM AMB HIGH"]
+    assert feed(c, 38, 1, amb=30.0) == ["INFO AMB OK"]
+
+
+def test_ambient_crit_to_warn_reports_high_not_ok():
+    c = L.Controller(now_ms=0)
+    feed(c, 38, 30)
+    assert feed(c, 38, 1, amb=46.0) == ["ALARM AMB CRIT"]
+    assert feed(c, 38, 1, amb=42.0) == ["INFO AMB HIGH"]
+    feed(c, 38, 30, amb=42.0)
+    assert abs(c.duty[0] - 60) < 0.01
+
+
+def test_ambient_hysteresis_no_flapping():
+    c = L.Controller(now_ms=0)
+    feed(c, 38, 30)
+    out = feed(c, 38, 1, amb=40.0)
+    for a in (39.5, 40.0, 39.2, 40.1, 39.5):
+        out += feed(c, 38, 1, amb=a)
+    assert out == ["ALARM AMB HIGH"], out
+    feed(c, 38, 10, amb=39.5)
+    assert abs(c.duty[0] - 60) < 0.01     # still overridden inside the band
+    assert feed(c, 38, 1, amb=38.9) == ["INFO AMB OK"]
+
+
 def test_stall_alarm_after_5_s_and_disabled_fan_silent():
     c = L.Controller(now_ms=0)
     feed(c, 70, 20)                       # well above stall_duty

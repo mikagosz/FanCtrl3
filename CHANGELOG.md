@@ -2,6 +2,16 @@
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.4] — 2026-09-23
+
+### Fixed
+- Ambient alarms: falling from the critical to the warning level sent
+  `INFO AMB OK` followed by `ALARM AMB HIGH`, and falling from the warning level
+  to normal sent nothing. Every change of level now sends exactly one line
+  (`ALARM AMB HIGH`, `ALARM AMB CRIT`, `INFO AMB HIGH`, `INFO AMB OK`).
+- The ambient levels have a 1.0 °C hysteresis (`amb_hyst`), so a reading that
+  hovers around a threshold no longer makes the fans and the alarms flap.
+
 ## [1.0.3] — 2026-09-23
 
 ### Fixed

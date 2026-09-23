@@ -197,6 +197,12 @@ Each fan's target is calculated every step, in this order:
    **45.0 °C**: **100 %**.
 5. The result is limited to 0–100 %.
 
+The ambient levels have a hysteresis of `amb_hyst` = **1.0 °C**: a level is entered at
+its threshold and left only when the temperature falls more than 1.0 °C below it
+(below 39.0 °C for the warning level, below 44.0 °C for the critical one). A probe
+reading that hovers around a threshold therefore does not make the fans or the alarms
+flap.
+
 Manual control therefore never overrides the safety rules in steps 2–4.
 
 ### Ramps
@@ -319,8 +325,10 @@ The controller sends these lines without being asked:
 |---|---|
 | `FanCtrl3 <version> start` | At power-up, at the start of the service window. |
 | `ALARM TEMP STALE` / `INFO TEMP OK` | Entering / leaving `failsafe`. |
-| `ALARM AMB HIGH` | Ambient temperature reaches `amb_warn` (40.0 °C) but is below `amb_crit`. |
-| `ALARM AMB CRIT` / `INFO AMB OK` | Ambient temperature reaches / falls below `amb_crit` (45.0 °C). |
+| `ALARM AMB HIGH` | Ambient temperature rises into the warning level (≥ 40.0 °C). |
+| `ALARM AMB CRIT` | Ambient temperature rises into the critical level (≥ 45.0 °C). |
+| `INFO AMB HIGH` | Ambient temperature falls from the critical level back to the warning level. |
+| `INFO AMB OK` | Ambient temperature falls back to normal, or the probe stops giving readings. |
 | `ALARM FAULT` / `INFO FAULT OK` | TPS2553 fault input becomes active / inactive. |
 | `ALARM FANn STALL` / `INFO FANn OK` | Fan *n* stalls / recovers (see [Stall detection](#stall-detection)). |
 | `ERR INTERNAL <error>` | An exception occurred in the main loop (see [Watchdog and error handling](#watchdog-and-error-handling)). |
@@ -328,12 +336,7 @@ The controller sends these lines without being asked:
 | `FanCtrl3 <version> service mode: REPL, fans at 100%, reset to resume` | At the boot after `SERVICE`. |
 
 Each alarm is reported once when the condition starts, and once more (as `INFO`) when
-it ends.
-
-> [!NOTE]
-> `AMB HIGH` has no clearing message. When the ambient temperature falls from the
-> critical range back into the warning range, the controller sends `INFO AMB OK`
-> followed by `ALARM AMB HIGH`.
+it ends. The ambient messages report every change of level, one line per change.
 
 ## Configuration and persistence
 
@@ -373,6 +376,7 @@ file if you have not saved your changes yet.
 | `amb_warn` | `40.0` | Ambient °C at which the duty is at least `amb_warn_duty` | – |
 | `amb_warn_duty` | `60` | % | – |
 | `amb_crit` | `45.0` | Ambient °C at which the duty is 100 % | – |
+| `amb_hyst` | `1.0` | °C below a threshold before its ambient level clears | – |
 | `stall_duty` | `30` | Stall check applies at or above this duty, % | – |
 | `stall_s` | `5` | Seconds at 0 rpm before `ALARM FANn STALL` | – |
 

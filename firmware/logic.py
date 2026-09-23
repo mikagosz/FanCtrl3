@@ -16,7 +16,7 @@ Duty values are percent of fan speed (100 = full). main.py inverts them for the
 open-collector / open-drain output.
 """
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 NFANS = 3
 
 DEFAULTS = {
@@ -32,6 +32,7 @@ DEFAULTS = {
     "amb_warn": 40.0,             # ambient degC -> at least amb_warn_duty
     "amb_warn_duty": 60,
     "amb_crit": 45.0,             # ambient degC -> 100 %
+    "amb_hyst": 1.0,              # degC below a threshold before its level clears
     "stall_duty": 30,             # a fan this fast with 0 rpm ...
     "stall_s": 5,                 # ... for this long -> ALARM FANn STALL
 }
@@ -102,6 +103,7 @@ class Controller:
         self.target = list(self.duty)
         self.rpm = [0] * NFANS
         self.amb = None
+        self.amb_level = 0       # 0 normal, 1 above amb_warn, 2 above amb_crit
         self.fault = False
         self.stall_since = [None] * NFANS
         self.stalled = [False] * NFANS
@@ -238,10 +240,9 @@ class Controller:
         else:
             base = 100.0
 
-        amb_crit = amb is not None and amb >= cfg["amb_crit"]
-        amb_warn = amb is not None and amb >= cfg["amb_warn"]
-        out += self._flag("AMB CRIT", amb_crit, "AMB OK")
-        out += self._flag("AMB HIGH", amb_warn and not amb_crit, None)
+        out += self._ambient(amb)
+        amb_crit = self.amb_level == 2
+        amb_warn = self.amb_level >= 1
         out += self._flag("FAULT", fault, "FAULT OK")
 
         for i in range(NFANS):
@@ -264,6 +265,23 @@ class Controller:
             self.duty[i] = d
             out += self._stall(i, now_ms)
         return out
+
+    def _ambient(self, amb):
+        """Ambient level with hysteresis; one message per level change."""
+        cfg = self.cfg
+        cur, h = self.amb_level, cfg["amb_hyst"]
+        new = 0
+        if amb is not None:
+            if amb >= cfg["amb_crit"] or (cur == 2 and amb > cfg["amb_crit"] - h):
+                new = 2
+            elif amb >= cfg["amb_warn"] or (cur >= 1 and amb > cfg["amb_warn"] - h):
+                new = 1
+        self.amb_level = new
+        if new == cur:
+            return []
+        if new > cur:
+            return ["ALARM AMB CRIT" if new == 2 else "ALARM AMB HIGH"]
+        return ["INFO AMB HIGH" if new == 1 else "INFO AMB OK"]
 
     def _stall(self, i, now_ms):
         cfg = self.cfg
