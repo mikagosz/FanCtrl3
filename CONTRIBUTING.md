@@ -19,9 +19,17 @@ Useful things to share:
   tach readings, temperatures.
 - **Circuit or layout improvements.** A better part, a cheaper source, a footprint
   that does not match the real part.
-- **Other hosts and sensors.** The host side currently reads Intel `coretemp`;
-  support for other temperature sources (for example AMD `k10temp`) is a natural
-  next step.
+- **Other hosts and sensors.** The host side reads Intel `coretemp` and AMD
+  `k10temp` / `zenpower`. Reports from AMD hosts are especially welcome, as are
+  other temperature sources.
+
+## Versions
+
+`VERSION` in [`firmware/logic.py`](firmware/logic.py) is the version of the project
+and what `fanctl send VER` reports. It changes only with the firmware, host software
+or hardware — changes to the documentation alone go into the `Unreleased` section of
+the [CHANGELOG](CHANGELOG.md) and ship with the next release. Every release gets a
+`vX.Y.Z` tag and a GitHub release.
 
 ## Pull requests
 
@@ -32,8 +40,10 @@ Useful things to share:
    [`hardware/tools/design_lite.py`](hardware/tools/design_lite.py) — never into the
    generated KiCad files. Run the matching build script and commit the regenerated
    outputs together with the change. See [docs/development.md](docs/development.md).
-3. Firmware and host changes: run `tests/run_all.sh`; all tests must pass. New
-   behaviour in `firmware/logic.py` comes with a test in `tests/test_logic.py`.
+3. Firmware and host changes: run `tests/run_all.sh`; all tests must pass (GitHub
+   Actions runs it on every pull request). New behaviour in `firmware/logic.py` comes
+   with a test in `tests/test_logic.py`, new behaviour in `host/fanctl` with one in
+   `tests/test_host.py` or `tests/test_e2e.py`.
 4. The host side stays on the Python standard library.
 
 By contributing you agree that your contribution is licensed under the

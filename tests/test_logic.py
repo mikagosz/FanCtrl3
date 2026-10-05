@@ -248,6 +248,30 @@ def test_config_merge_rejects_wrong_list_lengths():
     run(c, 3)                             # must not raise
 
 
+def test_nan_and_inf_are_rejected():
+    c = L.Controller(now_ms=0)
+    c.command("TEMP 50", 0)
+    for bad in ("nan", "inf", "-inf"):
+        assert c.command("SET 1 " + bad, 0) == ["ERR ARGS SET"], bad
+        assert c.command("MIN 1 " + bad, 0) == ["ERR ARGS MIN"], bad
+        assert c.command("CURVE %s:20 50:30" % bad, 0) == ["ERR ARGS CURVE"], bad
+        assert c.command("CURVE 30:20 50:" + bad, 0) == ["ERR ARGS CURVE"], bad
+        assert c.command("TEMP " + bad, 0) == ["ERR TEMP out of range"], bad
+    assert c.manual == [None, None, None]
+    assert c.cfg["curve"] == L.DEFAULTS["curve"]
+    run(c, 2)
+    assert all(L.finite(d) for d in c.duty), c.duty
+    assert c.command("STATUS", c.last_ms)[0].startswith("STAT ")
+    # a hand-edited (or older) saved file: json.load accepts NaN and Infinity
+    nan, inf = float("nan"), float("inf")
+    cfg = L.merge_config({"curve": [[nan, 20], [50, 30]], "min_duty": [nan, 20, 20],
+                          "hyst": inf, "curve_x": nan})
+    assert cfg["curve"] == L.DEFAULTS["curve"]
+    assert cfg["min_duty"] == [20, 20, 20] and cfg["hyst"] == L.DEFAULTS["hyst"]
+    assert L.check_curve([[30, "a"], [50, 30]]) is not None
+    assert L.check_curve([[30, True], [50, 30]]) is not None
+
+
 def main():
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

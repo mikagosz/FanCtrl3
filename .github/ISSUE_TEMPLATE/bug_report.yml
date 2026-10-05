@@ -1,0 +1,38 @@
+name: Bug report
+description: Something in the firmware, the host side or the hardware does not work as described
+labels: [bug]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Firmware (Pico)
+        - Host (fanctl, daemon, udev, systemd)
+        - Hardware (Pro)
+        - Hardware (Lite)
+        - Enclosure
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      placeholder: Commands you ran, the configuration you changed, ...
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of `fanctl status` and `journalctl -u fanctl -n 50`
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "firmware (fanctl send VER), Proxmox VE / kernel, CPU model"

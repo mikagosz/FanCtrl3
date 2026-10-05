@@ -9,8 +9,9 @@
 The daemon owns the serial port; the other commands talk to it through a unix
 socket. Without a running daemon they open the port themselves.
 
-Temperature: hwmon device named "coretemp", sensor labelled "Package id 0" -
-found by name every time, because hwmon numbers move between boots.
+Temperature: the CPU sensor of the hwmon driver - coretemp (Intel, "Package id N"),
+k10temp or zenpower (AMD, "Tdie", else "Tctl"); with several CPU packages the
+hottest one. Found by name every time, because hwmon numbers move between boots.
 On SIGTERM (shutdown, `systemctl stop`) the daemon sends BYE, so the controller
 rests at 20 % instead of treating the silence as a failure.
 """
@@ -39,32 +40,62 @@ def log(msg):
 
 
 # --- CPU temperature ---------------------------------------------------------------------
+# hwmon driver -> sensor labels to use, best first. A label ending in a space is a
+# prefix ("Package id 0", "Package id 1", ...). k10temp: Tdie is the real die
+# temperature where the CPU reports Tctl with an offset; elsewhere only Tctl exists.
+CPU_SENSORS = {
+    "coretemp": ("Package id ",),
+    "k10temp": ("Tdie", "Tctl"),
+    "zenpower": ("Tdie", "Tctl"),
+}
+
+
+def _read(path):
+    with open(path) as f:
+        return f.read().strip()
+
+
+def _device_temp(hw, labels):
+    """(degC, label) of one hwmon device, None if it has no readable sensor."""
+    temps = {}  # label (or file name if unlabelled) -> degC
+    for inp in sorted(glob.glob(os.path.join(hw, "temp*_input"))):
+        try:
+            t = int(_read(inp)) / 1000.0
+        except (OSError, ValueError):
+            continue
+        try:
+            label = _read(inp[:-len("_input")] + "_label")
+        except OSError:
+            label = os.path.basename(inp)
+        temps[label] = t
+    if not temps:
+        return None
+    for want in labels:
+        hits = [(t, l) for l, t in temps.items()
+                if (l.startswith(want) if want.endswith(" ") else l == want)]
+        if hits:
+            return max(hits)
+    return max(temps.values()), "hottest sensor"  # no known label
+
+
 def cpu_temp(root=HWMON):
-    """Package temperature in degC from coretemp, None if not found."""
+    """(degC, sensors) - the hottest CPU package, and a description of every sensor
+    read ("k10temp Tctl"; one per package, comma-separated) that does not change
+    while the hottest one does. (None, None) if none found."""
+    found = []
     for hw in sorted(glob.glob(os.path.join(root, "hwmon*"))):
         try:
-            with open(os.path.join(hw, "name")) as f:
-                if f.read().strip() != "coretemp":
-                    continue
+            name = _read(os.path.join(hw, "name"))
         except OSError:
             continue
-        best = None
-        for inp in sorted(glob.glob(os.path.join(hw, "temp*_input"))):
-            try:
-                with open(inp) as f:
-                    t = int(f.read().strip()) / 1000.0
-            except (OSError, ValueError):
-                continue
-            label = inp.replace("_input", "_label")
-            try:
-                with open(label) as f:
-                    if f.read().strip() == "Package id 0":
-                        return t
-            except OSError:
-                pass
-            best = t if best is None else max(best, t)
-        return best  # no package label: hottest core
-    return None
+        if name not in CPU_SENSORS:
+            continue
+        r = _device_temp(hw, CPU_SENSORS[name])
+        if r:
+            found.append((r[0], f"{name} {r[1]}"))
+    if not found:
+        return None, None
+    return max(t for t, _ in found), ", ".join(sorted(d for _, d in found))
 
 
 # --- serial port (USB CDC; the baud rate does not matter) ------------------------------------
@@ -147,6 +178,7 @@ class Daemon:
         self.alarms = []        # recent alarm/info lines
         self.stop = False
         self.missing_logged = False
+        self.sensor = ""        # where the CPU temperature came from last time
 
     def open_port(self):
         try:
@@ -188,11 +220,14 @@ class Daemon:
             self.open_port()
             if self.port is None:
                 return
-        t = cpu_temp(self.args.hwmon)
+        t, sensor = cpu_temp(self.args.hwmon)
+        if sensor != self.sensor:
+            self.sensor = sensor
+            log(f"CPU temperature from {sensor}" if sensor else
+                "no CPU temperature (coretemp, k10temp or zenpower) - not sending TEMP "
+                "(the controller goes to 100% after 30 s)")
         try:
-            if t is None:
-                log("no coretemp reading - not sending TEMP (the controller goes to 100% after 30 s)")
-            else:
+            if t is not None:
                 reply, other = self.port.ask(f"TEMP {t:.1f}")
                 self.note(other)
                 if reply != "OK":
@@ -205,6 +240,8 @@ class Daemon:
             self.drop_port(e)
 
     def serve_client(self, conn):
+        # a client that connects and sends nothing must not stop the TEMP updates
+        conn.settimeout(1.0)
         try:
             req = conn.recv(1024).decode().strip()
         except OSError:
@@ -303,7 +340,11 @@ def command(args, line):
         if ans.get("error"):
             sys.exit(f"error: {ans['error']}")
         return ans.get("reply")
-    port = Port(args.device)
+    try:
+        port = Port(args.device)
+    except OSError as e:
+        hint = " - run as root?" if isinstance(e, PermissionError) else ""
+        sys.exit(f"error: cannot open {args.device}: {e.strerror}{hint}")
     try:
         reply, _ = port.ask(line, timeout=args.reply_timeout)
         return reply
@@ -436,7 +477,10 @@ def main():
     elif args.cmd == "status":
         show_status(args)
     elif args.cmd == "send":
-        print(command(args, " ".join(args.words)))
+        reply = command(args, " ".join(args.words))
+        if reply is None:
+            sys.exit("no reply from the controller")
+        print(reply)
     elif args.cmd == "calibrate":
         calibrate(args)
 

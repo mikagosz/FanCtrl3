@@ -1,6 +1,35 @@
 # Changelog
 
 All notable changes to FanCtrl3. Versions follow [Semantic Versioning](https://semver.org/).
+Changes to the documentation alone go into an `Unreleased` section and ship with the
+next release (see [CONTRIBUTING.md](CONTRIBUTING.md#versions)).
+
+## [1.1.0] — 2026-10-05
+
+### Added
+- AMD CPUs: the host daemon reads `k10temp` and `zenpower` (`Tdie`, else `Tctl`)
+  besides Intel `coretemp`, and logs which sensor it uses.
+- GitHub Actions runs `tests/run_all.sh` on every push and pull request.
+- `tests/test_host.py`: host-side tests that need no controller.
+- Issue templates for bug reports and build reports.
+
+### Fixed
+- `SET`, `MIN` and `CURVE` accepted `nan` and `inf`. A fan at `nan` duty broke
+  `STATUS` and made every control step fail (`ERR INTERNAL`, fans at 100 %). They now
+  reply `ERR ARGS`, and a saved configuration with such values falls back to the
+  defaults.
+- Hosts with more than one CPU package: the hottest package is used, not the first.
+- The daemon no longer waits forever for a socket client that connects and sends
+  nothing (which stopped the temperature updates and sent the controller to failsafe).
+- `fanctl send` prints `no reply from the controller` instead of `None`, and every
+  command without a daemon reports a missing device in one line instead of a
+  traceback.
+- The firmware comment on the LED patterns now matches the code.
+
+### Changed
+- The build, flash and test scripts run in `bash` instead of `zsh`, which Debian and
+  Proxmox do not install by default.
+- The daemon logs a missing CPU temperature once, not at every interval.
 
 ## [1.0.11] — 2026-09-23
 

@@ -1,10 +1,10 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # FanCtrl3 Lite: perfboard (placement, wiring, checks, SVG, connection table, enclosure
 # geometry) + schematic from the same data (ERC, PDF)
 set -e
-cd "${0:A:h}/.."
+cd "$(dirname "$0")/.."
 KC=${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}
-setopt pipefail
+set -o pipefail
 q() { grep -vi "fontconfig\|stdpbase\|memory leak" || true; }
 python3 tools/gen_lite.py lite
 python3 tools/gen_sch.py lite

@@ -14,7 +14,7 @@ from it. Edit the design file, run the build script, commit the results.
 | OpenSCAD | 2024 or newer, Manifold backend (developed on 2026.06) | enclosure |
 | MicroPython (unix port) | 1.2x (developed on 1.29) | running the firmware tests |
 | mpremote | any recent | copying the firmware to the Pico |
-| zsh | any | the build and test scripts (`*.sh`, except `host/install.sh`, which is POSIX sh) |
+| bash | 3.2 or newer (macOS's built-in one is enough) | the build and test scripts (`*.sh`, except `host/install.sh`, which is POSIX sh) |
 
 The scripts use the default macOS install location of KiCad. Elsewhere, point them
 at your install:

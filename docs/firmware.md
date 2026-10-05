@@ -57,7 +57,7 @@ mpremote connect auto cp logic.py :logic.py + cp main.py :main.py + reset
 Requirements on the computer used for flashing:
 
 - `mpremote`, installed with `pipx install mpremote` (or `pip install --user mpremote`).
-- `zsh`, because `flash.sh` is a zsh script.
+- `bash`, which `flash.sh` runs in (on macOS the built-in one is enough).
 
 To flash a Pico that runs a fresh MicroPython install, connect it and run:
 
@@ -274,7 +274,7 @@ Changes made with `SET`, `MIN`, `ENABLE` and `CURVE` take effect immediately. On
 
 | Reply | Cause |
 |---|---|
-| `ERR ARGS <CMD>` | A required argument is missing or cannot be parsed, or the fan number is not 1–3. `<CMD>` is the command word in upper case. |
+| `ERR ARGS <CMD>` | A required argument is missing or cannot be parsed (`nan` and `inf` count as unparseable), or the fan number is not 1–3. `<CMD>` is the command word in upper case. |
 | `ERR UNKNOWN <CMD>` | Unknown command. |
 | `ERR SAVE <reason>` | `SAVE` could not write the configuration file. |
 | `ERR TEMP out of range` | `TEMP` value outside −20 to 130 °C. The value is ignored. |
@@ -448,11 +448,14 @@ To point the host tool at the simulator, pass the link as its device, for exampl
 `host/fanctl --device PATH status`.
 
 **Tests.** [`tests/run_all.sh`](../tests/run_all.sh) runs every test that does not need
-hardware. It needs `zsh`, `python3` and the unix port of MicroPython (`micropython`).
+hardware. It needs `bash`, `python3` and the unix port of MicroPython (`micropython`,
+on Debian and Ubuntu `apt install micropython`). The same script runs on GitHub Actions
+for every push and pull request.
 
 | Test | What it covers |
 |---|---|
 | `python3 tests/test_logic.py` | Control logic under CPython |
 | `micropython tests/test_logic.py` | The same tests under MicroPython |
 | `tests/test_main_smoke.sh` | Runs `firmware/main.py` under unix MicroPython with a stub `machine` module ([`tests/stubs/machine.py`](../tests/stubs/machine.py)) |
+| `python3 tests/test_host.py` | `fanctl` without a controller: CPU sensor discovery (Intel, AMD, several packages), CLI error messages, the daemon's socket |
 | `python3 tests/test_e2e.py` | End-to-end test: simulator, `fanctl` daemon and `fanctl` commands. Takes about a minute. |

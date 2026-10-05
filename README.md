@@ -14,6 +14,7 @@ crashed service or a pulled cable never leaves the fans stopped.
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![KiCad 10](https://img.shields.io/badge/KiCad-10-314CB0?logo=kicad&logoColor=white)](https://www.kicad.org/)
 [![MicroPython](https://img.shields.io/badge/MicroPython-RP2040-2B2728?logo=micropython&logoColor=white)](https://micropython.org/)
+[![tests](https://github.com/mikagosz/FanCtrl3/actions/workflows/tests.yml/badge.svg)](https://github.com/mikagosz/FanCtrl3/actions/workflows/tests.yml)
 [![Status: not yet tested on hardware](https://img.shields.io/badge/hardware-not%20yet%20tested-orange)](#project-status)
 
 <a href="https://github.com/sponsors/mikagosz"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white" width="350" alt="Sponsor on GitHub Sponsors"></a>
@@ -44,9 +45,11 @@ fans should spin up only when the server actually works.
 | Pro PCB | KiCad DRC with schematic parity | 0 violations, 0 unconnected pads, 0 parity issues |
 | Lite perfboard | the generator's own checker | every net connected, no hole shared by two nets, no wire through a foreign pad, no overlapping parts |
 | Enclosure | intersection of the enclosure with the component bodies | 0 collisions, both variants |
-| Control logic | 21 unit tests, run under CPython **and** MicroPython | all pass |
+| Control logic | 22 unit tests, run under CPython **and** MicroPython | all pass |
 | Firmware `main.py` | runs under the MicroPython unix port on stubbed hardware: replies, 25 kHz inverted PWM, watchdog; `SERVICE` and service mode; `SAVE` success and failure (12 checks) | all pass |
-| Host daemon and CLI | 13 end-to-end tests against a simulated controller: sensor selection, curve, `status`, `send`, `calibrate` (incl. a dead fan and failsafe), clean stop, restart without a temperature, crash → failsafe | all pass |
+| Host daemon and CLI | 10 unit tests (Intel and AMD sensors, several CPU packages, CLI errors, a silent socket client) and 13 end-to-end tests against a simulated controller: sensor selection, curve, `status`, `send`, `calibrate` (incl. a dead fan and failsafe), clean stop, restart without a temperature, crash → failsafe | all pass |
+
+Every push and pull request runs these tests on GitHub Actions.
 
 ### Not tested yet
 
@@ -59,11 +62,8 @@ fans should spin up only when the server actually works.
 
 ### Known issues
 
-- `fanctl send` prints `None` when the controller does not reply, and without a
-  daemon a missing device ends in a Python traceback instead of a short message.
-- On hosts with more than one CPU package only the first `coretemp` device is read.
-- The firmware comment on the LED patterns does not match the code;
-  [docs/firmware.md](docs/firmware.md#status-led) describes the real behaviour.
+- AMD support (`k10temp`, `zenpower`) is tested only against simulated sensors so
+  far — a report from a real AMD host is welcome.
 - `tests/test_main_smoke.sh` depends on timing and can fail on a heavily loaded
   machine; run it again before looking for a bug.
 
@@ -74,8 +74,8 @@ fans should spin up only when the server actually works.
   TI TPS2553 current-limited switch limits the fan side to 465–570 mA — the
   budget of a USB 2.0 port — and reports an overload to the controller.
 - **Curve in the controller, temperature from the host.** A small daemon on the
-  Proxmox host sends the CPU package temperature every 5 seconds; the controller
-  applies a curve with hysteresis and ramping.
+  Proxmox host sends the CPU package temperature (Intel or AMD) every 5 seconds; the
+  controller applies a curve with hysteresis and ramping.
 - **Safe by default.** No temperature for 30 s → fans at 100 %. A dead
   microcontroller → the output transistors switch off → fans at 100 %. A clean host
   shutdown → fans rest at 20 % instead of alarming.
@@ -117,7 +117,7 @@ Both use the same pinout and run the same firmware.
 ```
  Proxmox host                                 FanCtrl3
 ┌────────────────────────┐   USB cable    ┌──────────────────────────────────────┐
-│ coretemp ─► fanctl     │  power + data  │ Pico: curve, hysteresis, failsafe    │
+│ CPU temp ─► fanctl     │  power + data  │ Pico: curve, hysteresis, failsafe    │
 │             daemon ────┼───────────────►│  ├─ PWM ×3 ──► open collector/drain  │
 │  TEMP 54.0 every 5 s   │◄───────────────│  ├─ tach ×3 ◄── fans                 │
 │  STATUS, alarms        │                │  └─ DS18B20 ◄── ambient probe        │

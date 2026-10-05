@@ -1,0 +1,32 @@
+name: Build report
+description: You built a FanCtrl3 - tell us how it went (measurements are gold)
+labels: [build report]
+body:
+  - type: dropdown
+    id: variant
+    attributes:
+      label: Variant
+      options:
+        - Pro
+        - Lite
+    validations:
+      required: true
+  - type: input
+    id: fans
+    attributes:
+      label: Fans (model and rated power)
+  - type: input
+    id: host
+    attributes:
+      label: Host (machine, CPU, Proxmox VE version)
+  - type: textarea
+    id: measurements
+    attributes:
+      label: Measurements
+      description: Anything you measured - USB current at 100 %, the 12 V rail under load, tach readings, temperatures.
+  - type: textarea
+    id: notes
+    attributes:
+      label: What worked, what did not
+    validations:
+      required: true
