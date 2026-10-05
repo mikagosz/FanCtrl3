@@ -50,19 +50,28 @@ a Unix socket. When the daemon is not running, they open the serial port directl
 - **Proxmox VE** (Debian). `fanctl` itself runs on any Linux host; `install.sh` needs
   systemd and udev. Run the installer and the `fanctl` commands as root.
 - **Python 3, standard library only.** No other packages are needed.
-- **An Intel CPU.** The daemon reads the CPU temperature from the hwmon device named
-  **`coretemp`**, using the sensor labelled **`Package id 0`**. If that device has no
-  sensor with this label, the daemon uses the hottest reading of the device. Only the
-  first `coretemp` device found is read. The device is found by name every time,
-  because hwmon numbers can change between boots.
+- **An Intel or AMD CPU.** The daemon reads the CPU temperature from the kernel's
+  hwmon devices:
 
-> [!WARNING]
-> **Only Intel CPUs (`coretemp`) are supported for now.** Other temperature sensors,
-> such as AMD **`k10temp`**, are not supported yet. Without a `coretemp` device the
-> daemon sends no temperature to the controller, so the controller runs the fans at
-> 100 % (failsafe).
+  | hwmon driver | CPUs | Sensor used |
+  |---|---|---|
+  | `coretemp` | Intel | `Package id N` |
+  | `k10temp` | AMD (Ryzen, EPYC, Athlon, ...) | `Tdie` if present, otherwise `Tctl` |
+  | `zenpower` | AMD, out-of-tree replacement for `k10temp` | `Tdie` if present, otherwise `Tctl` |
 
-To check that the host has a `coretemp` device:
+  If a device has none of these labels, the daemon uses its hottest reading. On hosts
+  with more than one CPU package the hottest package wins. Devices are found by name
+  every time, because hwmon numbers can change between boots. The daemon logs which
+  sensors it reads, for example `CPU temperature from k10temp Tctl`.
+
+> [!NOTE]
+> On some older AMD CPUs (for example Ryzen 7 1700X/1800X, Threadripper 1000/2000)
+> `Tctl` reads 10–27 °C above the real temperature. Where the kernel knows that
+> offset it also provides `Tdie`, which the daemon prefers. Without a supported
+> device the daemon sends no temperature, so the controller runs the fans at 100 %
+> (failsafe).
+
+To check which hwmon devices the host has:
 
 ```sh
 cat /sys/class/hwmon/hwmon*/name
@@ -182,8 +191,9 @@ Behaviour:
   temperature still ends in failsafe (100 %) instead of leaving the fans at 20 %.
 - **Controller lost.** The daemon logs `lost the controller: <reason>` and returns to
   waiting.
-- **No temperature.** If no `coretemp` reading is found, the daemon does not send
-  `TEMP` and logs this at every interval.
+- **No temperature.** If no CPU temperature is found, the daemon does not send
+  `TEMP`. It logs this once, and logs again when a sensor appears
+  (`CPU temperature from <driver> <label>`).
 - **Controller messages.** `ALARM`, `INFO` and `ERR` lines from the controller are
   written to the log. The daemon also keeps the 20 most recent ones, with timestamps,
   for `fanctl status`.
@@ -336,8 +346,9 @@ The controller has not received a temperature for more than 30 s.
 
 - Check that the service is running: `systemctl status fanctl`.
 - Check the log with `journalctl -u fanctl`. If it shows
-  `no coretemp reading - not sending TEMP`, the host has no `coretemp` hwmon device.
-  Only Intel CPUs are supported for now (see [Requirements](#requirements)).
+  `no CPU temperature (coretemp, k10temp or zenpower)`, the host has no supported
+  hwmon device (see [Requirements](#requirements)). Check that the driver is loaded,
+  for example `modprobe k10temp`.
 - As soon as temperatures arrive again, the controller returns to the curve.
 
 A controller that has received `BYE` stays in rest mode (20 %) until the next
