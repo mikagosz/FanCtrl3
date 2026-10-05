@@ -16,7 +16,7 @@ Duty values are percent of fan speed (100 = full). main.py inverts them for the
 open-collector / open-drain output.
 """
 
-VERSION = "1.0.11"
+VERSION = "1.1.0"
 NFANS = 3
 
 DEFAULTS = {
@@ -43,9 +43,22 @@ MODES = ("start", "auto", "rest", "failsafe")
 PER_FAN = ("min_duty", "enabled")  # one number per fan header
 
 
+def finite(x):
+    """A real number: not a bool, not nan, not +-inf (all three pass float())."""
+    return (isinstance(x, (int, float)) and not isinstance(x, bool)
+            and -1e300 < x < 1e300)
+
+
+def number(s):
+    """float(s) for a command argument; ValueError for nan and inf too."""
+    v = float(s)
+    if not finite(v):
+        raise ValueError
+    return v
+
+
 def per_fan_ok(v):
-    return (isinstance(v, list) and len(v) == NFANS
-            and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v))
+    return isinstance(v, list) and len(v) == NFANS and all(finite(x) for x in v)
 
 
 def merge_config(saved):
@@ -56,6 +69,8 @@ def merge_config(saved):
     if isinstance(saved, dict):
         for k, v in saved.items():
             if k in PER_FAN and not per_fan_ok(v):
+                continue
+            if isinstance(v, float) and not finite(v):
                 continue
             if k in cfg and type(v) == type(cfg[k]):
                 cfg[k] = v
@@ -75,6 +90,8 @@ def check_curve(points):
         if not isinstance(p, list) or len(p) != 2:
             return "point must be t:p"
         t, d = p
+        if not (finite(t) and finite(d)):
+            return "point must be numbers"
         if not (0 <= d <= 100):
             return "duty must be 0..100"
         if last is not None and t <= last:
@@ -166,14 +183,14 @@ class Controller:
                 if args[1].upper() == "AUTO":
                     self.manual[n] = None
                 else:
-                    self.manual[n] = clamp(float(args[1]), 0, 100)
+                    self.manual[n] = clamp(number(args[1]), 0, 100)
                 return ["OK"]
             if cmd == "AUTO":
                 self.manual = [None] * NFANS
                 return ["OK"]
             if cmd == "MIN":
                 n = self._fan(args[0])
-                self.cfg["min_duty"][n] = int(clamp(float(args[1]), 0, 100))
+                self.cfg["min_duty"][n] = int(clamp(number(args[1]), 0, 100))
                 return ["OK"]
             if cmd == "ENABLE":
                 n = self._fan(args[0])
@@ -183,7 +200,7 @@ class Controller:
                 pts = []
                 for a in args:
                     t, d = a.split(":")
-                    pts.append([float(t), float(d)])
+                    pts.append([number(t), number(d)])
                 why = check_curve(pts)
                 if why:
                     return ["ERR CURVE " + why]

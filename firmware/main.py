@@ -8,7 +8,8 @@ Pinout (same on Pro and Lite):
   GP6          DS18B20 ambient probe (1-Wire)
   GP7          TPS2553 FAULT, active low (both; Lite has the TPS2553 on an adapter)
   GP8          TPS2553 EN - driven high, fans powered (pulled up on the board too)
-  LED          status: slow blink = auto, double blink = start/rest, fast = failsafe
+  LED          status, every 2 s: one short flash = auto, two = start/rest;
+               fast blinking (125 ms on/off) = failsafe
 
 Protocol: text lines over USB CDC, see logic.Controller.command.
 
