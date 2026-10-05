@@ -1,8 +1,8 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # FanCtrl3 enclosure: 2 variants x (base, lid) -> STL, collision check against the
 # component bodies, PNG preview. Needs OpenSCAD with the Manifold backend (2024.x or newer).
 set -e
-cd "${0:A:h}/../enclosure"
+cd "$(dirname "$0")/../enclosure"
 SCAD=FanCtrl3-enclosure.scad
 mkdir -p stl preview
 for v in pro lite; do
@@ -12,8 +12,8 @@ for v in pro lite; do
   done
   # the intersection of the enclosure and the component bodies must be empty
   out=$(openscad --backend=Manifold -D "variant=\"$v\"" -D 'part="collisions"' -o ${TMPDIR:-/tmp}/fanctrl3-collisions-$v.stl $SCAD 2>&1 || true)
-  if print -r -- "$out" | grep -q "top level object is empty"; then echo "  $v: collisions 0"
-  else echo "  $v: COLLISION"; print -r -- "$out" | tail -3; fi
+  if printf '%s\n' "$out" | grep -q "top level object is empty"; then echo "  $v: collisions 0"
+  else echo "  $v: COLLISION"; printf '%s\n' "$out" | tail -3; fi
   openscad --backend=Manifold -D "variant=\"$v\"" -D 'part="assembly"' --imgsize=1600,1100 \
     --camera=0,0,0,55,0,25,0 --viewall --autocenter --colorscheme=Tomorrow -o preview/$v-assembly.png $SCAD >/dev/null 2>&1
 done

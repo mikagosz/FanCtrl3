@@ -1,12 +1,12 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # Full rebuild of FanCtrl3 Pro: schematic -> ERC -> board -> route -> DRC
 set -e
-cd "${0:A:h}/.."
+cd "$(dirname "$0")/.."
 # KiCad's bundled Python (it has the pcbnew module)
 KPY=${KICAD_PYTHON:-/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3}
 KC=${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}
 O=pro/FanCtrl3-Pro
-setopt pipefail
+set -o pipefail
 q() { grep -vi "fontconfig\|stdpbase\|memory leak" || true; }
 python3 tools/gen_sch.py pro
 $KC sch erc --severity-all -o $O-erc.rpt $O.kicad_sch 2>&1 | q

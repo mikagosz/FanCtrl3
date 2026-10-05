@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # render.sh <board.kicad_pcb> <out.png> [layers]
 KC=${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}
 L=${3:-"F.Cu,B.Cu,F.SilkS,Edge.Cuts,F.CrtYd"}

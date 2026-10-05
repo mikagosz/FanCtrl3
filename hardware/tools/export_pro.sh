@@ -1,12 +1,12 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 # Fabrication outputs for FanCtrl3 Pro: Gerbers + drill files -> ZIP for a PCB fab, BOM CSV
 set -e
-cd "${0:A:h}/.."
+cd "$(dirname "$0")/.."
 KC=${KICAD_CLI:-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli}
 O=pro/FanCtrl3-Pro
 OUT=pro/fabrication
 G=$OUT/gerbers
-setopt pipefail
+set -o pipefail
 q() { grep -vi "fontconfig\|stdpbase\|memory leak" || true; }
 rm -rf $G && mkdir -p $G
 $KC pcb export gerbers --check-zones --subtract-soldermask \
